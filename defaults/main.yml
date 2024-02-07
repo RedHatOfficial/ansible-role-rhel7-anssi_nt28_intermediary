@@ -78,6 +78,7 @@ DISA_STIG_RHEL_07_020210: true
 DISA_STIG_RHEL_07_020260: true
 DISA_STIG_RHEL_07_021000: true
 DISA_STIG_RHEL_07_021710: true
+DISA_STIG_RHEL_07_030000: true
 DISA_STIG_RHEL_07_030690: true
 DISA_STIG_RHEL_07_040160: true
 DISA_STIG_RHEL_07_040201: true
@@ -165,6 +166,7 @@ mount_option_var_tmp_nosuid: true
 no_direct_root_logins: true
 no_reboot_needed: true
 package_aide_installed: true
+package_audit_installed: true
 package_dhcp_removed: true
 package_rsh_removed: true
 package_rsh_server_removed: true
@@ -187,6 +189,7 @@ restrict_strategy: true
 sebool_polyinstantiation_enabled: true
 security_patches_up_to_date: true
 selinux_state: true
+service_auditd_enabled: true
 set_password_hashing_algorithm_systemauth: true
 skip_ansible_lint: true
 sshd_disable_root_login: true
