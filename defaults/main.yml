@@ -2,7 +2,8 @@
 # defaults file for rhel7_anssi_nt28_intermediary
 var_sudo_passwd_timeout: '1'
 var_sudo_umask: '0027'
-var_password_pam_unix_remember: '2'
+var_password_pam_remember: '2'
+var_password_pam_remember_control_flag: requisite
 var_accounts_passwords_pam_faillock_deny: '3'
 var_accounts_passwords_pam_faillock_fail_interval: '900'
 var_accounts_passwords_pam_faillock_unlock_time: '900'
@@ -54,11 +55,13 @@ DISA_STIG_RHEL_07_010140: true
 DISA_STIG_RHEL_07_010150: true
 DISA_STIG_RHEL_07_010200: true
 DISA_STIG_RHEL_07_010250: true
+DISA_STIG_RHEL_07_010270: true
 DISA_STIG_RHEL_07_010280: true
 DISA_STIG_RHEL_07_010320: true
 DISA_STIG_RHEL_07_010330: true
 DISA_STIG_RHEL_07_010340: true
 DISA_STIG_RHEL_07_010350: true
+DISA_STIG_RHEL_07_010375: true
 DISA_STIG_RHEL_07_020000: true
 DISA_STIG_RHEL_07_020010: true
 DISA_STIG_RHEL_07_020029: true
@@ -89,8 +92,9 @@ accounts_password_pam_dcredit: true
 accounts_password_pam_lcredit: true
 accounts_password_pam_minlen: true
 accounts_password_pam_ocredit: true
+accounts_password_pam_pwhistory_remember_password_auth: true
+accounts_password_pam_pwhistory_remember_system_auth: true
 accounts_password_pam_ucredit: true
-accounts_password_pam_unix_remember: true
 accounts_password_pam_unix_rounds_password_auth: true
 accounts_password_pam_unix_rounds_system_auth: true
 accounts_passwords_pam_faillock_deny: true
