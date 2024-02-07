@@ -678,6 +678,7 @@
   tags:
   - CCE-26957-1
   - CJIS-5.10.4.1
+  - DISA-STIG-RHEL-07-010019
   - NIST-800-171-3.4.8
   - NIST-800-53-CM-5(3)
   - NIST-800-53-CM-6(a)
@@ -692,6 +693,7 @@
   - no_reboot_needed
   - restrict_strategy
   when:
+  - DISA_STIG_RHEL_07_010019 | bool
   - ensure_redhat_gpgkey_installed | bool
   - high_severity | bool
   - medium_complexity | bool
@@ -707,6 +709,7 @@
   tags:
   - CCE-26957-1
   - CJIS-5.10.4.1
+  - DISA-STIG-RHEL-07-010019
   - NIST-800-171-3.4.8
   - NIST-800-53-CM-5(3)
   - NIST-800-53-CM-6(a)
@@ -721,6 +724,7 @@
   - no_reboot_needed
   - restrict_strategy
   when:
+  - DISA_STIG_RHEL_07_010019 | bool
   - ensure_redhat_gpgkey_installed | bool
   - high_severity | bool
   - medium_complexity | bool
@@ -736,6 +740,7 @@
   tags:
   - CCE-26957-1
   - CJIS-5.10.4.1
+  - DISA-STIG-RHEL-07-010019
   - NIST-800-171-3.4.8
   - NIST-800-53-CM-5(3)
   - NIST-800-53-CM-6(a)
@@ -750,6 +755,7 @@
   - no_reboot_needed
   - restrict_strategy
   when:
+  - DISA_STIG_RHEL_07_010019 | bool
   - ensure_redhat_gpgkey_installed | bool
   - high_severity | bool
   - medium_complexity | bool
@@ -763,6 +769,7 @@
   tags:
   - CCE-26957-1
   - CJIS-5.10.4.1
+  - DISA-STIG-RHEL-07-010019
   - NIST-800-171-3.4.8
   - NIST-800-53-CM-5(3)
   - NIST-800-53-CM-6(a)
@@ -777,6 +784,7 @@
   - no_reboot_needed
   - restrict_strategy
   when:
+  - DISA_STIG_RHEL_07_010019 | bool
   - ensure_redhat_gpgkey_installed | bool
   - high_severity | bool
   - medium_complexity | bool
@@ -789,6 +797,7 @@
     state: present
     key: /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
   when:
+  - DISA_STIG_RHEL_07_010019 | bool
   - ensure_redhat_gpgkey_installed | bool
   - high_severity | bool
   - medium_complexity | bool
@@ -802,6 +811,7 @@
   tags:
   - CCE-26957-1
   - CJIS-5.10.4.1
+  - DISA-STIG-RHEL-07-010019
   - NIST-800-171-3.4.8
   - NIST-800-53-CM-5(3)
   - NIST-800-53-CM-6(a)
@@ -9420,8 +9430,8 @@
   - reboot_required
   - sysctl_net_ipv4_ip_forward
 
-- name: Configure excluded (non local) file systems
-  set_fact:
+- name: Ensure All World-Writable Directories Are Owned by root User - Define Excluded (Non-Local) File Systems and Paths
+  ansible.builtin.set_fact:
     excluded_fstypes:
     - afs
     - ceph
@@ -9442,6 +9452,12 @@
     - lustre
     - davfs
     - fuse.sshfs
+    excluded_paths:
+    - dev
+    - proc
+    - run
+    - sys
+    search_paths: []
   tags:
   - CCE-83374-9
   - dir_perms_world_writable_root_owned
@@ -9458,9 +9474,15 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Create empty list of excluded paths
-  set_fact:
-    excluded_paths: []
+- name: Ensure All World-Writable Directories Are Owned by root User - Find Relevant Root Directories Ignoring Pre-Defined
+    Excluded Paths
+  ansible.builtin.find:
+    paths: /
+    file_type: directory
+    excludes: '{{ excluded_paths }}'
+    hidden: true
+    recurse: false
+  register: result_relevant_root_dirs
   tags:
   - CCE-83374-9
   - dir_perms_world_writable_root_owned
@@ -9477,9 +9499,31 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Detect nonlocal file systems and add them to excluded paths
-  set_fact:
-    excluded_paths: '{{ excluded_paths | union([item.mount]) }}'
+- name: Ensure All World-Writable Directories Are Owned by root User - Include Relevant Root Directories in a List of Paths
+    to be Searched
+  ansible.builtin.set_fact:
+    search_paths: '{{ search_paths | union([item.path]) }}'
+  loop: '{{ result_relevant_root_dirs.files }}'
+  tags:
+  - CCE-83374-9
+  - dir_perms_world_writable_root_owned
+  - low_complexity
+  - medium_disruption
+  - medium_severity
+  - no_reboot_needed
+  - restrict_strategy
+  when:
+  - dir_perms_world_writable_root_owned | bool
+  - low_complexity | bool
+  - medium_disruption | bool
+  - medium_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
+
+- name: Ensure All World-Writable Directories Are Owned by root User - Increment Search Paths List with Local Partitions Mount
+    Points
+  ansible.builtin.set_fact:
+    search_paths: '{{ search_paths | union([item.mount]) }}'
   loop: '{{ ansible_mounts }}'
   when:
   - dir_perms_world_writable_root_owned | bool
@@ -9488,7 +9532,8 @@
   - medium_severity | bool
   - no_reboot_needed | bool
   - restrict_strategy | bool
-  - item.fstype in excluded_fstypes
+  - item.fstype not in excluded_fstypes
+  - item.mount != '/'
   tags:
   - CCE-83374-9
   - dir_perms_world_writable_root_owned
@@ -9498,14 +9543,31 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Find all directories excluding non-local partitions
-  find:
-    paths: /
-    excludes: excluded_paths
-    file_type: directory
-    hidden: true
-    recurse: true
-  register: found_dirs
+- name: Ensure All World-Writable Directories Are Owned by root User - Increment Search Paths List with Local NFS File System
+    Targets
+  ansible.builtin.set_fact:
+    search_paths: '{{ search_paths | union([item.device.split('':'')[1]]) }}'
+  loop: '{{ ansible_mounts }}'
+  when:
+  - dir_perms_world_writable_root_owned | bool
+  - low_complexity | bool
+  - medium_disruption | bool
+  - medium_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
+  - item.device is search("localhost:")
+  tags:
+  - CCE-83374-9
+  - dir_perms_world_writable_root_owned
+  - low_complexity
+  - medium_disruption
+  - medium_severity
+  - no_reboot_needed
+  - restrict_strategy
+
+- name: Ensure All World-Writable Directories Are Owned by root User - Define Rule Specific Facts
+  ansible.builtin.set_fact:
+    world_writable_dirs: []
   tags:
   - CCE-83374-9
   - dir_perms_world_writable_root_owned
@@ -9522,9 +9584,12 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Create list of world writable directories
-  set_fact:
-    world_writable_dirs: '{{ found_dirs.files | selectattr(''woth'') | list }}'
+- name: Ensure All World-Writable Directories Are Owned by root User - Find All Uncompliant Directories in Local File Systems
+  ansible.builtin.command:
+    cmd: find {{ item }} -xdev -type d -perm -0002 -uid +0
+  loop: '{{ search_paths }}'
+  changed_when: false
+  register: result_found_dirs
   tags:
   - CCE-83374-9
   - dir_perms_world_writable_root_owned
@@ -9541,12 +9606,32 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Change owner to root on directories which are world writable
-  file:
-    path: '{{ item.path }}'
+- name: Ensure All World-Writable Directories Are Owned by root User - Create List of World Writable Directories Not Owned
+    by root
+  ansible.builtin.set_fact:
+    world_writable_dirs: '{{ world_writable_dirs | union(item.stdout_lines) | list }}'
+  loop: '{{ result_found_dirs.results }}'
+  tags:
+  - CCE-83374-9
+  - dir_perms_world_writable_root_owned
+  - low_complexity
+  - medium_disruption
+  - medium_severity
+  - no_reboot_needed
+  - restrict_strategy
+  when:
+  - dir_perms_world_writable_root_owned | bool
+  - low_complexity | bool
+  - medium_disruption | bool
+  - medium_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
+
+- name: Ensure All World-Writable Directories Are Owned by root User - Ensure root Ownership on Local World Writable Directories
+  ansible.builtin.file:
+    path: '{{ item }}'
     owner: root
   loop: '{{ world_writable_dirs }}'
-  ignore_errors: true
   tags:
   - CCE-83374-9
   - dir_perms_world_writable_root_owned
@@ -10487,7 +10572,8 @@
   - medium_severity | bool
   - mount_option_home_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/home" in ansible_mounts
+    | map(attribute="mount") | list )
   tags:
   - CCE-81153-9
   - DISA-STIG-RHEL-07-021000
@@ -10518,7 +10604,8 @@
   - medium_severity | bool
   - mount_option_home_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/home" in ansible_mounts
+    | map(attribute="mount") | list )
   - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length > 0)
   tags:
@@ -10557,7 +10644,8 @@
   - medium_severity | bool
   - mount_option_home_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/home" in ansible_mounts
+    | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
   - (device_name.stdout | length == 0)
   tags:
@@ -10587,7 +10675,8 @@
   - medium_severity | bool
   - mount_option_home_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/home" in ansible_mounts
+    | map(attribute="mount") | list )
   - mount_info is defined and "nosuid" not in mount_info.options
   tags:
   - CCE-81153-9
@@ -10620,7 +10709,8 @@
   - medium_severity | bool
   - mount_option_home_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/home" in ansible_mounts
+    | map(attribute="mount") | list )
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-81153-9
@@ -10684,7 +10774,8 @@
   - medium_severity | bool
   - mount_option_opt_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/opt" in ansible_mounts |
+    map(attribute="mount") | list )
   tags:
   - CCE-83317-8
   - configure_strategy
@@ -10707,7 +10798,8 @@
   - medium_severity | bool
   - mount_option_opt_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/opt" in ansible_mounts |
+    map(attribute="mount") | list )
   - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length > 0)
   tags:
@@ -10738,7 +10830,8 @@
   - medium_severity | bool
   - mount_option_opt_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/opt" in ansible_mounts |
+    map(attribute="mount") | list )
   - ("--fstab" | length == 0)
   - (device_name.stdout | length == 0)
   tags:
@@ -10760,7 +10853,8 @@
   - medium_severity | bool
   - mount_option_opt_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/opt" in ansible_mounts |
+    map(attribute="mount") | list )
   - mount_info is defined and "nosuid" not in mount_info.options
   tags:
   - CCE-83317-8
@@ -10785,7 +10879,8 @@
   - medium_severity | bool
   - mount_option_opt_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/opt" in ansible_mounts |
+    map(attribute="mount") | list )
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83317-8
@@ -10808,7 +10903,8 @@
   - medium_severity | bool
   - mount_option_srv_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/srv" in ansible_mounts |
+    map(attribute="mount") | list )
   tags:
   - CCE-83320-2
   - configure_strategy
@@ -10831,7 +10927,8 @@
   - medium_severity | bool
   - mount_option_srv_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/srv" in ansible_mounts |
+    map(attribute="mount") | list )
   - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length > 0)
   tags:
@@ -10862,7 +10959,8 @@
   - medium_severity | bool
   - mount_option_srv_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/srv" in ansible_mounts |
+    map(attribute="mount") | list )
   - ("--fstab" | length == 0)
   - (device_name.stdout | length == 0)
   tags:
@@ -10884,7 +10982,8 @@
   - medium_severity | bool
   - mount_option_srv_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/srv" in ansible_mounts |
+    map(attribute="mount") | list )
   - mount_info is defined and "nosuid" not in mount_info.options
   tags:
   - CCE-83320-2
@@ -10909,7 +11008,8 @@
   - medium_severity | bool
   - mount_option_srv_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/srv" in ansible_mounts |
+    map(attribute="mount") | list )
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83320-2
@@ -11250,7 +11350,8 @@
   - medium_severity | bool
   - mount_option_var_log_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   tags:
   - CCE-82142-1
   - NIST-800-53-AC-6
@@ -11279,7 +11380,8 @@
   - medium_severity | bool
   - mount_option_var_log_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length > 0)
   tags:
@@ -11316,7 +11418,8 @@
   - medium_severity | bool
   - mount_option_var_log_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
   - (device_name.stdout | length == 0)
   tags:
@@ -11344,7 +11447,8 @@
   - medium_severity | bool
   - mount_option_var_log_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - mount_info is defined and "noexec" not in mount_info.options
   tags:
   - CCE-82142-1
@@ -11375,7 +11479,8 @@
   - medium_severity | bool
   - mount_option_var_log_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-82142-1
@@ -11404,7 +11509,8 @@
   - medium_severity | bool
   - mount_option_var_log_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   tags:
   - CCE-82144-7
   - NIST-800-53-AC-6
@@ -11433,7 +11539,8 @@
   - medium_severity | bool
   - mount_option_var_log_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length > 0)
   tags:
@@ -11470,7 +11577,8 @@
   - medium_severity | bool
   - mount_option_var_log_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
   - (device_name.stdout | length == 0)
   tags:
@@ -11498,7 +11606,8 @@
   - medium_severity | bool
   - mount_option_var_log_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - mount_info is defined and "nosuid" not in mount_info.options
   tags:
   - CCE-82144-7
@@ -11529,7 +11638,8 @@
   - medium_severity | bool
   - mount_option_var_log_nosuid | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
+    | map(attribute="mount") | list )
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-82144-7
@@ -11558,7 +11668,8 @@
   - medium_severity | bool
   - mount_option_var_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
+    map(attribute="mount") | list )
   tags:
   - CCE-83329-3
   - configure_strategy
@@ -11581,7 +11692,8 @@
   - medium_severity | bool
   - mount_option_var_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
+    map(attribute="mount") | list )
   - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length > 0)
   tags:
@@ -11612,7 +11724,8 @@
   - medium_severity | bool
   - mount_option_var_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
+    map(attribute="mount") | list )
   - ("--fstab" | length == 0)
   - (device_name.stdout | length == 0)
   tags:
@@ -11634,7 +11747,8 @@
   - medium_severity | bool
   - mount_option_var_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
+    map(attribute="mount") | list )
   - mount_info is defined and "noexec" not in mount_info.options
   tags:
   - CCE-83329-3
@@ -11659,7 +11773,8 @@
   - medium_severity | bool
   - mount_option_var_noexec | bool
   - no_reboot_needed | bool
-  - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
+    map(attribute="mount") | list )
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83329-3
