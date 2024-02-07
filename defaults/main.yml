@@ -56,6 +56,7 @@ var_postfix_root_mail_alias: system.administrator@mail.mil
 var_postfix_inet_interfaces: loopback-only
 var_sshd_set_keepalive: '0'
 sshd_idle_timeout_value: '600'
+DISA_STIG_RHEL_07_010019: true
 DISA_STIG_RHEL_07_010120: true
 DISA_STIG_RHEL_07_010130: true
 DISA_STIG_RHEL_07_010140: true
