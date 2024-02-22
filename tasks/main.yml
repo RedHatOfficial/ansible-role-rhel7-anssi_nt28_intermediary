@@ -640,7 +640,16 @@
     option: gpgcheck
     value: '1'
     no_extra_spaces: true
-  loop: '{{ repo_grep_results.stdout | regex_findall( ''(.+\.repo):\[(.+)\]\n?'' ) }}'
+  loop: '{{ repo_grep_results.stdout |regex_findall( ''(.+\.repo):\[(.+)\]\n?'' ) if repo_grep_results is not skipped else
+    []}}'
+  when:
+  - enable_strategy | bool
+  - ensure_gpgcheck_never_disabled | bool
+  - high_severity | bool
+  - low_complexity | bool
+  - medium_disruption | bool
+  - no_reboot_needed | bool
+  - repo_grep_results is not skipped
   tags:
   - CCE-26876-3
   - CJIS-5.10.4.1
@@ -662,13 +671,6 @@
   - low_complexity
   - medium_disruption
   - no_reboot_needed
-  when:
-  - enable_strategy | bool
-  - ensure_gpgcheck_never_disabled | bool
-  - high_severity | bool
-  - low_complexity | bool
-  - medium_disruption | bool
-  - no_reboot_needed | bool
 
 - name: Read permission of GPG key directory
   stat:
@@ -768,7 +770,9 @@
 
 - name: Set Fact - Valid fingerprints
   set_fact:
-    gpg_valid_fingerprints: ("567E347AD0044ADE55BA8A5F199E2F91FD431D51" "43A6E49C4A38F4BE9ABF2A5345689C882FA658E0")
+    gpg_valid_fingerprints:
+    - 567E347AD0044ADE55BA8A5F199E2F91FD431D51
+    - 43A6E49C4A38F4BE9ABF2A5345689C882FA658E0
   tags:
   - CCE-26957-1
   - CJIS-5.10.4.1
@@ -894,7 +898,7 @@
   - low_severity | bool
   - no_reboot_needed | bool
   - restrict_strategy | bool
-  - ( not ( lookup("env", "container") == "bwrap-osbuild" ) and "pam" in ansible_facts.packages )
+  - '"pam" in ansible_facts.packages'
   tags:
   - CCE-83743-5
   - enable_pam_namespace
@@ -5330,14 +5334,6 @@
     seuser: system_u
     serole: object_r
     setype: tmp_t
-  when:
-  - accounts_polyinstantiated_tmp | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - low_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - not ( lookup("env", "container") == "bwrap-osbuild" )
   tags:
   - CCE-83731-0
   - accounts_polyinstantiated_tmp
@@ -5346,6 +5342,13 @@
   - low_severity
   - no_reboot_needed
   - restrict_strategy
+  when:
+  - accounts_polyinstantiated_tmp | bool
+  - low_complexity | bool
+  - low_disruption | bool
+  - low_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
 
 - name: Make changes to /etc/security/namespace.conf
   lineinfile:
@@ -5354,14 +5357,6 @@
     regexp: ^\s*/tmp\s+/tmp/tmp-inst/\s+level\s+root,adm$
     line: /tmp     /tmp/tmp-inst/        level      root,adm
     state: present
-  when:
-  - accounts_polyinstantiated_tmp | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - low_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - not ( lookup("env", "container") == "bwrap-osbuild" )
   tags:
   - CCE-83731-0
   - accounts_polyinstantiated_tmp
@@ -5370,6 +5365,13 @@
   - low_severity
   - no_reboot_needed
   - restrict_strategy
+  when:
+  - accounts_polyinstantiated_tmp | bool
+  - low_complexity | bool
+  - low_disruption | bool
+  - low_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
 
 - name: Create /var/tmp/tmp-inst directory
   file:
@@ -5379,14 +5381,6 @@
     seuser: system_u
     serole: object_r
     setype: tmp_t
-  when:
-  - accounts_polyinstantiated_var_tmp | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - low_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - not ( lookup("env", "container") == "bwrap-osbuild" )
   tags:
   - CCE-83777-3
   - accounts_polyinstantiated_var_tmp
@@ -5395,6 +5389,13 @@
   - low_severity
   - no_reboot_needed
   - restrict_strategy
+  when:
+  - accounts_polyinstantiated_var_tmp | bool
+  - low_complexity | bool
+  - low_disruption | bool
+  - low_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
 
 - name: Make changes to /etc/security/namespace.conf
   lineinfile:
@@ -5403,14 +5404,6 @@
     regexp: ^\s*/var/tmp\s+/var/tmp/tmp-inst/\s+level\s+root,adm$
     line: /var/tmp /var/tmp/tmp-inst/    level      root,adm
     state: present
-  when:
-  - accounts_polyinstantiated_var_tmp | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - low_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - not ( lookup("env", "container") == "bwrap-osbuild" )
   tags:
   - CCE-83777-3
   - accounts_polyinstantiated_var_tmp
@@ -5419,12 +5412,19 @@
   - low_severity
   - no_reboot_needed
   - restrict_strategy
+  when:
+  - accounts_polyinstantiated_var_tmp | bool
+  - low_complexity | bool
+  - low_disruption | bool
+  - low_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
 
 - name: Correct any occurrence of TMOUT in /etc/bashrc
   replace:
     path: /etc/bashrc
     regexp: ^[^#].*TMOUT=.*
-    replace: declare -xr TMOUT={{ var_accounts_tmout }}
+    replace: typeset -xr TMOUT={{ var_accounts_tmout }}
   register: bashrc_replaced
   when:
   - DISA_STIG_RHEL_07_040160 | bool
@@ -5455,7 +5455,7 @@
   replace:
     path: /etc/profile
     regexp: ^[^#].*TMOUT=.*
-    replace: declare -xr TMOUT={{ var_accounts_tmout }}
+    replace: typeset -xr TMOUT={{ var_accounts_tmout }}
   register: profile_replaced
   when:
   - DISA_STIG_RHEL_07_040160 | bool
@@ -5487,7 +5487,7 @@
     path: /etc/profile.d/tmout.sh
     create: true
     regexp: TMOUT=
-    line: declare -xr TMOUT={{ var_accounts_tmout }}
+    line: typeset -xr TMOUT={{ var_accounts_tmout }}
     state: present
   when:
   - DISA_STIG_RHEL_07_040160 | bool
@@ -5832,7 +5832,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add l1tf argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="l1tf={{ var_l1tf_options }} "
     state: present
@@ -5848,7 +5848,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-90775-8
   - grub2_l1tf_argument
@@ -5861,7 +5861,7 @@
 - name: Replace existing l1tf argument
   replace:
     path: /etc/default/grub
-    regexp: l1tf=\w+
+    regexp: l1tf=[a-zA-Z0-9,]+
     replace: l1tf={{ var_l1tf_options }}
   when:
   - grub2_l1tf_argument | bool
@@ -5872,7 +5872,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-90775-8
   - grub2_l1tf_argument
@@ -5896,7 +5896,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-90775-8
   - grub2_l1tf_argument
@@ -5989,7 +5989,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add mce argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="mce=0 "
     state: present
@@ -6005,7 +6005,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-90774-1
   - grub2_mce_argument
@@ -6018,7 +6018,7 @@
 - name: Replace existing mce argument
   replace:
     path: /etc/default/grub
-    regexp: mce=\w+
+    regexp: mce=[a-zA-Z0-9,]+
     replace: mce=0
   when:
   - grub2_mce_argument | bool
@@ -6029,7 +6029,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-90774-1
   - grub2_mce_argument
@@ -6053,7 +6053,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-90774-1
   - grub2_mce_argument
@@ -6146,7 +6146,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add rng_core.default_quality argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="rng_core.default_quality={{ var_rng_core_default_quality }} "
     state: present
@@ -6162,7 +6162,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-90771-7
   - grub2_rng_core_default_quality_argument
@@ -6175,7 +6175,7 @@
 - name: Replace existing rng_core.default_quality argument
   replace:
     path: /etc/default/grub
-    regexp: rng_core.default_quality=\w+
+    regexp: rng_core.default_quality=[a-zA-Z0-9,]+
     replace: rng_core.default_quality={{ var_rng_core_default_quality }}
   when:
   - grub2_rng_core_default_quality_argument | bool
@@ -6186,7 +6186,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-90771-7
   - grub2_rng_core_default_quality_argument
@@ -6210,7 +6210,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-90771-7
   - grub2_rng_core_default_quality_argument
@@ -6303,7 +6303,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add slab_nomerge argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="slab_nomerge=yes "
     state: present
@@ -6319,7 +6319,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-90770-9
   - grub2_slab_nomerge_argument
@@ -6332,7 +6332,7 @@
 - name: Replace existing slab_nomerge argument
   replace:
     path: /etc/default/grub
-    regexp: slab_nomerge=\w+
+    regexp: slab_nomerge=[a-zA-Z0-9,]+
     replace: slab_nomerge=yes
   when:
   - grub2_slab_nomerge_argument | bool
@@ -6343,7 +6343,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-90770-9
   - grub2_slab_nomerge_argument
@@ -6367,7 +6367,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-90770-9
   - grub2_slab_nomerge_argument
@@ -6460,7 +6460,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add spec_store_bypass_disable argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="spec_store_bypass_disable={{ var_spec_store_bypass_disable_options }} "
     state: present
@@ -6476,7 +6476,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-90769-1
   - grub2_spec_store_bypass_disable_argument
@@ -6489,7 +6489,7 @@
 - name: Replace existing spec_store_bypass_disable argument
   replace:
     path: /etc/default/grub
-    regexp: spec_store_bypass_disable=\w+
+    regexp: spec_store_bypass_disable=[a-zA-Z0-9,]+
     replace: spec_store_bypass_disable={{ var_spec_store_bypass_disable_options }}
   when:
   - grub2_spec_store_bypass_disable_argument | bool
@@ -6500,7 +6500,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-90769-1
   - grub2_spec_store_bypass_disable_argument
@@ -6524,7 +6524,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-90769-1
   - grub2_spec_store_bypass_disable_argument
@@ -6617,7 +6617,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add spectre_v2 argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="spectre_v2=on "
     state: present
@@ -6633,7 +6633,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-90763-4
   - grub2_spectre_v2_argument
@@ -6646,7 +6646,7 @@
 - name: Replace existing spectre_v2 argument
   replace:
     path: /etc/default/grub
-    regexp: spectre_v2=\w+
+    regexp: spectre_v2=[a-zA-Z0-9,]+
     replace: spectre_v2=on
   when:
   - grub2_spectre_v2_argument | bool
@@ -6657,7 +6657,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-90763-4
   - grub2_spectre_v2_argument
@@ -6681,7 +6681,7 @@
   - restrict_strategy | bool
   - '"grub2-common" in ansible_facts.packages'
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-90763-4
   - grub2_spectre_v2_argument
@@ -10029,6 +10029,14 @@
   ansible.builtin.set_fact:
     world_writable_dirs: '{{ world_writable_dirs | union(item.stdout_lines) | list }}'
   loop: '{{ result_found_dirs.results }}'
+  when:
+  - dir_perms_world_writable_root_owned | bool
+  - low_complexity | bool
+  - medium_disruption | bool
+  - medium_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
+  - item is not skipped
   tags:
   - CCE-83374-9
   - dir_perms_world_writable_root_owned
@@ -10037,13 +10045,6 @@
   - medium_severity
   - no_reboot_needed
   - restrict_strategy
-  when:
-  - dir_perms_world_writable_root_owned | bool
-  - low_complexity | bool
-  - medium_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
 
 - name: Ensure All World-Writable Directories Are Owned by root User - Ensure root Ownership on Local World Writable Directories
   ansible.builtin.file:
@@ -10268,6 +10269,14 @@
   ansible.builtin.set_fact:
     world_writable_dirs: '{{ world_writable_dirs | union(item.stdout_lines) | list }}'
   loop: '{{ result_found_dirs.results }}'
+  when:
+  - dir_perms_world_writable_sticky_bits | bool
+  - low_complexity | bool
+  - low_disruption | bool
+  - medium_severity | bool
+  - no_reboot_needed | bool
+  - restrict_strategy | bool
+  - result_found_dirs is not skipped and item is not skipped
   tags:
   - CCE-80130-8
   - NIST-800-53-AC-6(1)
@@ -10279,13 +10288,6 @@
   - medium_severity
   - no_reboot_needed
   - restrict_strategy
-  when:
-  - dir_perms_world_writable_sticky_bits | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
 
 - name: Verify that All World-Writable Directories Have Sticky Bits Set - Ensure Sticky Bit is Set on Local World Writable
     Directories
@@ -10834,6 +10836,7 @@
   - no_reboot_needed | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-83315-2
@@ -10880,6 +10883,7 @@
   - mount_option_boot_noexec | bool
   - no_reboot_needed | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83315-2
@@ -10970,6 +10974,7 @@
   - no_reboot_needed | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-82138-9
@@ -11028,6 +11033,7 @@
   - mount_option_boot_nosuid | bool
   - no_reboot_needed | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-82138-9
@@ -11114,6 +11120,7 @@
   - no_reboot_needed | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-83327-7
@@ -11162,6 +11169,7 @@
   - mount_option_home_noexec | bool
   - no_reboot_needed | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83327-7
@@ -11261,6 +11269,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/home" in ansible_mounts
     | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-81153-9
@@ -11325,6 +11334,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/home" in ansible_mounts
     | map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-81153-9
@@ -11447,6 +11457,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/opt" in ansible_mounts |
     map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-83317-8
@@ -11495,6 +11506,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/opt" in ansible_mounts |
     map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83317-8
@@ -11576,6 +11588,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/srv" in ansible_mounts |
     map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-83320-2
@@ -11624,6 +11637,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/srv" in ansible_mounts |
     map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83320-2
@@ -11717,6 +11731,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/tmp" in ansible_mounts |
     map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-80150-6
@@ -11777,6 +11792,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/tmp" in ansible_mounts |
     map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-80150-6
@@ -11876,6 +11892,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/tmp" in ansible_mounts |
     map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-80151-4
@@ -11936,6 +11953,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/tmp" in ansible_mounts |
     map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-80151-4
@@ -12035,6 +12053,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
     | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-82142-1
@@ -12095,6 +12114,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
     | map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-82142-1
@@ -12194,6 +12214,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
     | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-82144-7
@@ -12254,6 +12275,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/log" in ansible_mounts
     | map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-82144-7
@@ -12341,6 +12363,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
     map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-83329-3
@@ -12389,6 +12412,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
     map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83329-3
@@ -12470,6 +12494,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
     map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-83378-0
@@ -12518,6 +12543,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var" in ansible_mounts |
     map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-83378-0
@@ -12599,6 +12625,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/tmp" in ansible_mounts
     | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-82150-4
@@ -12647,6 +12674,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/tmp" in ansible_mounts
     | map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-82150-4
@@ -12728,6 +12756,7 @@
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/tmp" in ansible_mounts
     | map(attribute="mount") | list )
   - ("--fstab" | length == 0)
+  - device_name.stdout is defined and device_name.stdout_lines is defined
   - (device_name.stdout | length == 0)
   tags:
   - CCE-82153-8
@@ -12776,6 +12805,7 @@
   - no_reboot_needed | bool
   - ( ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"] and "/var/tmp" in ansible_mounts
     | map(attribute="mount") | list )
+  - mount_info is defined
   - (device_name.stdout is defined and (device_name.stdout | length > 0)) or ("--fstab" | length == 0)
   tags:
   - CCE-82153-8
@@ -13806,7 +13836,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add page_poison argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="page_poison=1 "
     state: present
@@ -13822,7 +13852,7 @@
   - restrict_strategy | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - '"grub2-common" in ansible_facts.packages'
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-82158-7
   - NIST-800-53-CM-6(a)
@@ -13836,7 +13866,7 @@
 - name: Replace existing page_poison argument
   replace:
     path: /etc/default/grub
-    regexp: page_poison=\w+
+    regexp: page_poison=[a-zA-Z0-9,]+
     replace: page_poison=1
   when:
   - grub2_page_poison_argument | bool
@@ -13847,7 +13877,7 @@
   - restrict_strategy | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - '"grub2-common" in ansible_facts.packages'
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-82158-7
   - NIST-800-53-CM-6(a)
@@ -13872,7 +13902,7 @@
   - restrict_strategy | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - '"grub2-common" in ansible_facts.packages'
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-82158-7
   - NIST-800-53-CM-6(a)
@@ -13970,7 +14000,7 @@
   - reboot_required
   - restrict_strategy
 
-- name: Add watch rule for  in /etc/audit/audit.rules
+- name: Add slub_debug argument
   ansible.builtin.lineinfile:
     line: GRUB_CMDLINE_LINUX="slub_debug={{ var_slub_debug_options }} "
     state: present
@@ -13986,7 +14016,7 @@
   - restrict_strategy | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - '"grub2-common" in ansible_facts.packages'
-  - argcheck.rc != 0 and linecheck.rc != 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc != 0
   tags:
   - CCE-82157-9
   - NIST-800-53-CM-6(a)
@@ -14000,7 +14030,7 @@
 - name: Replace existing slub_debug argument
   replace:
     path: /etc/default/grub
-    regexp: slub_debug=\w+
+    regexp: slub_debug=[a-zA-Z0-9,]+
     replace: slub_debug={{ var_slub_debug_options }}
   when:
   - grub2_slub_debug_argument | bool
@@ -14011,7 +14041,7 @@
   - restrict_strategy | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - '"grub2-common" in ansible_facts.packages'
-  - argcheck.rc == 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc == 0 and linecheck.rc == 0
   tags:
   - CCE-82157-9
   - NIST-800-53-CM-6(a)
@@ -14036,7 +14066,7 @@
   - restrict_strategy | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   - '"grub2-common" in ansible_facts.packages'
-  - argcheck.rc != 0 and linecheck.rc == 0
+  - argcheck is not skipped and linecheck is not skipped and argcheck.rc != 0 and linecheck.rc == 0
   tags:
   - CCE-82157-9
   - NIST-800-53-CM-6(a)
@@ -14118,7 +14148,7 @@
   - restrict_strategy
   - selinux_state
 
-- name: Ensure libsemanage-python installed
+- name: Configure the polyinstantiation_enabled SELinux Boolean - Ensure libsemanage-python Installed
   package:
     name: libsemanage-python
     state: present
@@ -14129,7 +14159,6 @@
   - medium_severity | bool
   - no_reboot_needed | bool
   - sebool_polyinstantiation_enabled | bool
-  - ( not ( lookup("env", "container") == "bwrap-osbuild" ) )
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
   tags:
   - CCE-82305-4
@@ -14140,7 +14169,7 @@
   - no_reboot_needed
   - sebool_polyinstantiation_enabled
 
-- name: Set SELinux boolean polyinstantiation_enabled accordingly
+- name: Configure the polyinstantiation_enabled SELinux Boolean - Set SELinux Boolean polyinstantiation_enabled Accordingly
   seboolean:
     name: polyinstantiation_enabled
     state: '{{ var_polyinstantiation_enabled }}'
@@ -14152,8 +14181,8 @@
   - medium_severity | bool
   - no_reboot_needed | bool
   - sebool_polyinstantiation_enabled | bool
-  - ( not ( lookup("env", "container") == "bwrap-osbuild" ) )
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
+  - ansible_facts.selinux.status == 'enabled'
   tags:
   - CCE-82305-4
   - enable_strategy
